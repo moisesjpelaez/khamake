@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.convert = void 0;
 const child_process = require("child_process");
 const fs = require("fs");
+const log = require("./log");
 function convert(inFilename, outFilename, encoder, args = null) {
     return new Promise((resolve, reject) => {
         if (fs.existsSync(outFilename.toString()) && fs.statSync(outFilename.toString()).mtime.getTime() > fs.statSync(inFilename.toString()).mtime.getTime()) {
@@ -42,8 +43,22 @@ function convert(inFilename, outFilename, encoder, args = null) {
             fs.unlinkSync(outFilename.toString());
         }
         // About stdio ignore: https://stackoverflow.com/a/20792428
-        let process = child_process.spawn(exe, options, { stdio: 'ignore' });
+        let process = child_process.spawn(exe, options, {
+            stdio: ['ignore', 'ignore', 'pipe'] // don't ignore stderr
+        });
+        let stderr = '';
+        if (process.stderr) {
+            process.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
+        }
         process.on('close', (code) => {
+            if (code !== 0) {
+                let msg = `Converter exited with code ${code}`;
+                if (stderr.length > 0)
+                    msg += `: ${stderr}`;
+                log.error(msg);
+            }
             resolve(code === 0);
         });
     });
