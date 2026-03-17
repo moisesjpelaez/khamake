@@ -40,8 +40,21 @@ export function convert(inFilename: string, outFilename: string, encoder: string
 			fs.unlinkSync(outFilename.toString());
 		}
 		// About stdio ignore: https://stackoverflow.com/a/20792428
-		let process = child_process.spawn(exe, options, {stdio: 'ignore'});
+		let process = child_process.spawn(exe, options, {
+			stdio: ['ignore', 'ignore', 'pipe'] // don't ignore stderr
+		});
+		let stderr: string = '';
+		if (process.stderr) {
+			process.stderr.on('data', (data: Buffer | string) => {
+				stderr += data.toString();
+			});
+		}
 		process.on('close', (code: number) => {
+			if (code !== 0) {
+				let msg = `Converter exited with code ${code}`;
+				if (stderr.length > 0) msg += `: ${stderr}`;
+				log.error(msg);
+			}
 			resolve(code === 0);
 		});
 	});
