@@ -223,7 +223,7 @@ export class Html5Exporter extends KhaExporter {
 		let mp4_size = 0;
 		let mp3 = false;
 		let mp3_size = 0;
-		if (!this.isDebugHtml5()) {
+		if (!this.isDebugHtml5() && !this.options.oggonly) {
 			mp4 = await convert(from, path.join(this.options.to, this.sysdir(), to + '.mp4'), this.options.aac);
 			if (mp4) {
 				mp4_size = (await fs.stat(path.join(this.options.to, this.sysdir(), to + '.mp4'))).size;

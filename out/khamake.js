@@ -147,6 +147,11 @@ let options = [
         default: ''
     },
     {
+        full: 'oggonly',
+        description: 'Generate only ogg files for the html5 target, without `mp3/mp4` fallback',
+        value: false,
+    },
+    {
         full: 'krafix',
         description: 'Location of krafix shader compiler',
         value: true,

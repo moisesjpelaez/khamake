@@ -41,6 +41,7 @@ export class Options {
 	ogg: string;
 	aac: string;
 	mp3: string;
+	oggonly: boolean;
 	h264: string;
 	webm: string;
 	wmv: string;
