@@ -1,7 +1,7 @@
-import {Callbacks} from './ProjectFile';
+import { Callbacks } from './ProjectFile';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import {KhaExporter} from './Exporters/KhaExporter';
+import { KhaExporter } from './Exporters/KhaExporter';
 import * as log from './log';
 import * as chokidar from 'chokidar';
 import * as crypto from 'crypto';
@@ -9,12 +9,39 @@ import * as Throttle from 'promise-parallel-throttle';
 import { Options } from './Options';
 import { AssetMatcher, AssetMatcherOptions } from './Project';
 
+export type AssetType = 'image' | 'sound' | 'video' | 'font' | 'blob' | 'shader';
+
+export type AssetInfo = {
+	name: string;
+	from?: string;
+	type: AssetType;
+	files: string[];
+	file_sizes: number[];
+	original_width?: number;
+	original_height?: number;
+	readable?: boolean;
+
+	inputs?: any;
+	outputs?: any;
+	uniforms?: any;
+	types?: any;
+};
+
+export const supportedAssetExtensions = [
+	'.png', '.jpg', '.jpeg', '.hdr',
+	'.ogg', '.mp3', '.flac', '.wav',
+	'.mp4', '.webm', '.mov', '.wmv', '.avi',
+	'.ttf'
+];
+
 export class AssetConverter {
 	options: Options;
 	exporter: KhaExporter;
 	platform: string;
 	assetMatchers: Array<AssetMatcher>;
-	watcher: fs.FSWatcher;
+	watcher?: fs.FSWatcher;
+	onAssetChanged?: (asset: AssetInfo) => void;
+	onAssetRemoved?: (name: string) => void;
 
 	constructor(exporter: KhaExporter, options: Options, assetMatchers: Array<AssetMatcher>) {
 		this.exporter = exporter;
@@ -45,7 +72,7 @@ export class AssetConverter {
 		return pattern.replace(/{name}/g, name).replace(/{ext}/g, fileinfo.ext).replace(dirRegex, dirValue);
 	}
 
-	static createExportInfo(fileinfo: path.ParsedPath, keepextension: boolean, options: AssetMatcherOptions, from: string): {name: string, destination: string} {
+	static createExportInfo(fileinfo: path.ParsedPath, keepextension: boolean, options: AssetMatcherOptions, from: string): { name: string, destination: string } {
 		let nameValue = fileinfo.name;
 
 		let destination = fileinfo.name;
@@ -75,7 +102,7 @@ export class AssetConverter {
 			nameValue = AssetConverter.replacePattern(options.name, nameValue, fileinfo, options, from);
 		}
 
-		return {name: nameValue, destination: destination};
+		return { name: nameValue, destination: destination };
 	}
 
 	canDecodeFormat(ext: string): boolean {
@@ -99,8 +126,8 @@ export class AssetConverter {
 		}
 	}
 
-	watch(watch: boolean, match: string, temp: string, options: AssetMatcherOptions): Promise<{ name: string, from: string, type: string, files: string[], file_sizes: number[], original_width: number, original_height: number, readable: boolean }[]> {
-		return new Promise<{ name: string, from: string, type: string, files: string[], file_sizes: number[], original_width: number, original_height: number, readable: boolean }[]>((resolve, reject) => {
+	watch(watch: boolean, match: string, temp: string, options: AssetMatcherOptions): Promise<AssetInfo[]> {
+		return new Promise<AssetInfo[]>((resolve, reject) => {
 			let ready = false;
 			let files: string[] = [];
 			this.watcher = chokidar.watch(match, { ignored: /[\/\\]\.(svn|git|DS_Store)/, persistent: watch, followSymlinks: false });
@@ -111,48 +138,55 @@ export class AssetConverter {
 				// with subfolders
 				if (options.destination) {
 					// remove trailing slash
-					const nameBaseDir = options.nameBaseDir.replace(/\/$/, '');
-					const lastIndex = options.baseDir.lastIndexOf(nameBaseDir)
-					const from = path.resolve(options.baseDir.substring(0, lastIndex));
+					const nameBaseDir = options.nameBaseDir!.replace(/\/$/, '');
+					const lastIndex = options.baseDir!.lastIndexOf(nameBaseDir)
+					const from = path.resolve(options.baseDir!.substring(0, lastIndex));
 					outPath = AssetConverter.replacePattern(options.destination, fileinfo.name, fileinfo, options, from);
 				}
 				const ext = fileinfo.ext.toLowerCase();
 				log.info('Reexporting ' + outPath + ext);
-				switch (ext) {
-					case '.png':
-					case '.jpg':
-					case '.jpeg':
-					case '.hdr': {}
-						await this.exporter.copyImage(this.platform, file, outPath, {}, {});
-						break;
 
-					case '.ogg':
-					case '.mp3':
-					case '.flac':
-					case '.wav': {
+				let result: { files: string[], sizes: number[] } | null = null;
+				const assetType = AssetConverter.getExtensionAssetType(ext);
+
+				switch (assetType) {
+					case 'image':
+						result = await this.exporter.copyImage(this.platform, file, outPath, {}, {});
+						break;
+					case 'sound':
 						if (!this.canDecodeFormat(ext)) {
 							log.error(`Error: ${fileinfo.base} should be in wav format, or use \`--ffmpeg path/to/ffmpeg\` option to convert ogg/mp3/flac files`);
 						}
-						await this.exporter.copySound(this.platform, file, outPath, {});
+						result = await this.exporter.copySound(this.platform, file, outPath, {});
 						break;
-					}
-
-					case '.mp4':
-					case '.webm':
-					case '.mov':
-					case '.wmv':
-					case '.avi': {
-						await this.exporter.copyVideo(this.platform, file, outPath, {});
+					case 'video':
+						result = await this.exporter.copyVideo(this.platform, file, outPath, {});
 						break;
-					}
-
-					case '.ttf':
-						await this.exporter.copyFont(this.platform, file, outPath, {});
+					case 'font':
+						result = await this.exporter.copyFont(this.platform, file, outPath, {});
 						break;
-
-					default:
-						await this.exporter.copyBlob(this.platform, file, outPath + ext, {});
+					case 'blob':
+						result = await this.exporter.copyBlob(this.platform, file, outPath + ext, {});
+						break;
+					case 'shader':
+						break;
 				}
+
+				if (result && this.onAssetChanged) {
+					const isKeepExt = assetType === 'blob';
+					const exportInfo = AssetConverter.createExportInfo(fileinfo, isKeepExt, options, this.exporter.options.from);
+					this.onAssetChanged({
+						name: exportInfo.name,
+						from: file,
+						type: assetType,
+						files: result.files,
+						file_sizes: result.sizes,
+						original_width: options.original_width,
+						original_height: options.original_height,
+						readable: options.readable
+					});
+				}
+
 				for (let callback of Callbacks.postAssetReexporting) {
 					callback(outPath + ext);
 				}
@@ -173,9 +207,17 @@ export class AssetConverter {
 					}
 				});
 			}
+			this.watcher.on('unlink', (file: string) => {
+				if (!this.onAssetRemoved) return;
+				const fileinfo = path.parse(file);
+				const ext = fileinfo.ext.toLowerCase();
+				const keepExt = !supportedAssetExtensions.includes(ext);
+				const exportInfo = AssetConverter.createExportInfo(fileinfo, keepExt, options, this.exporter.options.from);
+				this.onAssetRemoved(exportInfo.name);
+			});
 			this.watcher.on('ready', async () => {
 				ready = true;
-				let parsedFiles: { name: string, from: string, type: string, files: string[], file_sizes: number[], original_width: number, original_height: number, readable: boolean }[] = [];
+				let parsedFiles: AssetInfo[] = [];
 				let cache: any = {};
 				let cachePath = path.join(temp, 'cache.json');
 				if (fs.existsSync(cachePath)) {
@@ -186,11 +228,9 @@ export class AssetConverter {
 					let fileinfo = path.parse(file);
 					log.info('Exporting asset ' + (index + 1) + ' of ' + files.length + ' (' + fileinfo.base + ').');
 					const ext = fileinfo.ext.toLowerCase();
-					switch (ext) {
-						case '.png':
-						case '.jpg':
-						case '.jpeg':
-						case '.hdr': {
+					const assetType = AssetConverter.getExtensionAssetType(ext);
+					switch (assetType) {
+						case 'image': {
 							let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
 							let images: { files: string[], sizes: number[] };
 							if (options.noprocessing) {
@@ -204,10 +244,7 @@ export class AssetConverter {
 							}
 							break;
 						}
-						case '.ogg':
-						case '.mp3':
-						case '.flac':
-						case '.wav': {
+						case 'sound': {
 							let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
 							let sounds: { files: string[], sizes: number[] };
 							if (options.noprocessing) {
@@ -228,7 +265,7 @@ export class AssetConverter {
 							}
 							break;
 						}
-						case '.ttf': {
+						case 'font': {
 							let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
 							let fonts: { files: string[], sizes: number[] };
 							if (options.noprocessing) {
@@ -242,11 +279,7 @@ export class AssetConverter {
 							}
 							break;
 						}
-						case '.mp4':
-						case '.webm':
-						case '.mov':
-						case '.wmv':
-						case '.avi': {
+						case 'video': {
 							let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
 							let videos: { files: string[], sizes: number[] };
 							if (options.noprocessing) {
@@ -263,7 +296,7 @@ export class AssetConverter {
 							}
 							break;
 						}
-						default: {
+						case 'blob': {
 							let exportInfo = AssetConverter.createExportInfo(fileinfo, true, options, this.exporter.options.from);
 							let blobs = await this.exporter.copyBlob(this.platform, file, exportInfo.destination, options);
 							if (!options.notinlist) {
@@ -297,14 +330,39 @@ export class AssetConverter {
 				}
 
 				fs.ensureDirSync(temp);
-				fs.writeFileSync(cachePath, JSON.stringify(cache), { encoding: 'utf8'});
+				fs.writeFileSync(cachePath, JSON.stringify(cache), { encoding: 'utf8' });
 				resolve(parsedFiles);
 			});
 		});
 	}
 
-	async run(watch: boolean, temp: string): Promise<{ name: string, from: string, type: string, files: string[], file_sizes: number[], original_width: number, original_height: number, readable: boolean }[]> {
-		let files: { name: string, from: string, type: string, files: string[], file_sizes: number[], original_width: number, original_height: number, readable: boolean }[] = [];
+	static getExtensionAssetType(ext: string): AssetType {
+		switch (ext) {
+			case '.png':
+			case '.jpg':
+			case '.jpeg':
+			case '.hdr':
+				return 'image';
+			case '.ogg':
+			case '.mp3':
+			case '.flac':
+			case '.wav':
+				return 'sound';
+			case '.mp4':
+			case '.webm':
+			case '.mov':
+			case '.wmv':
+			case '.avi':
+				return 'video';
+			case '.ttf':
+				return 'font';
+			default:
+				return 'blob';
+		}
+	}
+
+	async run(watch: boolean, temp: string): Promise<AssetInfo[]> {
+		let files: AssetInfo[] = [];
 		for (let matcher of this.assetMatchers) {
 			files = files.concat(await this.watch(watch, matcher.match, temp, matcher.options));
 		}
