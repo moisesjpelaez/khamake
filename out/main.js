@@ -287,11 +287,9 @@ async function exportKhaProject(options) {
     let exporter = null;
     let target = options.target.toLowerCase();
     let baseTarget = target;
-    let customTarget = null;
-    if (project.customTargets.get(options.target)) {
-        customTarget = project.customTargets.get(options.target);
+    const customTarget = project.customTargets.get(options.target);
+    if (customTarget)
         baseTarget = customTarget.baseTarget;
-    }
     switch (baseTarget) {
         case Platform_1.Platform.Krom:
             exporter = new KromExporter_1.KromExporter(options);
@@ -370,9 +368,47 @@ async function exportKhaProject(options) {
     for (let callback of ProjectFile_1.Callbacks.preAssetConversion) {
         callback();
     }
+    function writeResourcesJson(files) {
+        fs.outputFileSync(path.join(options.to, exporter.sysdir() + '-resources', 'files.json'), JSON.stringify({ files: files }, null, '\t'));
+    }
     let assetConverter = new AssetConverter_1.AssetConverter(exporter, options, project.assetMatchers);
     lastAssetConverter = assetConverter;
     let assets = await assetConverter.run(options.watch, temp);
+    if (options.watch) {
+        assetConverter.onAssetChanged = (changedAsset) => {
+            const fixedName = fixName(changedAsset.name);
+            const filesI = files.findIndex(f => f.name === fixedName);
+            const entry = {
+                name: fixedName,
+                files: changedAsset.files,
+                file_sizes: changedAsset.file_sizes,
+                type: changedAsset.type
+            };
+            if (changedAsset.type === 'image') {
+                entry.original_width = changedAsset.original_width;
+                entry.original_height = changedAsset.original_height;
+                if (changedAsset.readable)
+                    entry.readable = changedAsset.readable;
+            }
+            if (filesI >= 0) {
+                // update existing asset
+                files[filesI] = entry;
+            }
+            else {
+                files.push(entry);
+                sortFiles(files);
+            }
+            writeResourcesJson(files);
+        };
+        assetConverter.onAssetRemoved = (name) => {
+            const fixedName = fixName(name);
+            const filesI = files.findIndex(f => f.name === fixedName);
+            if (filesI >= 0) {
+                files.splice(filesI, 1);
+                writeResourcesJson(files);
+            }
+        };
+    }
     if ((target === Platform_1.Platform.DebugHTML5 && process.platform === 'win32') || target === Platform_1.Platform.HTML5) {
         Icon.exportIco(project.icon, path.join(options.to, exporter.sysdir(), 'favicon.ico'), options.from, options);
     }
@@ -443,9 +479,9 @@ async function exportKhaProject(options) {
         }
         return fallback;
     }
-    let files = [];
+    const files = [];
     for (let asset of assets) {
-        let file = {
+        const file = {
             name: fixName(asset.name),
             files: asset.files,
             file_sizes: asset.file_sizes,
@@ -475,13 +511,7 @@ async function exportKhaProject(options) {
         });
     }
     // Sort to prevent files.json from changing between makes when no files have changed.
-    files.sort(function (a, b) {
-        if (a.name > b.name)
-            return 1;
-        if (a.name < b.name)
-            return -1;
-        return 0;
-    });
+    sortFiles(files);
     function secondPass() {
         // First pass is for main project files. Second pass is for shaders.
         // Will try to look for the folder, e.g. 'build/Shaders'.
@@ -500,12 +530,21 @@ async function exportKhaProject(options) {
         }*/
     }
     if (foundProjectFile) {
-        fs.outputFileSync(path.join(options.to, exporter.sysdir() + '-resources', 'files.json'), JSON.stringify({ files: files }, null, '\t'));
+        writeResourcesJson(files);
     }
     for (let callback of ProjectFile_1.Callbacks.preHaxeCompilation) {
         callback();
     }
     return await exportProjectFiles(project.name, path.join(options.to, exporter.sysdir() + '-resources'), options, exporter, kore, korehl, project.icon, project.libraries, project.targetOptions, project.defines, project.cdefines, project.cflags, project.cppflags, project.stackSize, project.version, project.id);
+}
+function sortFiles(files) {
+    files.sort(function (a, b) {
+        if (a.name > b.name)
+            return 1;
+        if (a.name < b.name)
+            return -1;
+        return 0;
+    });
 }
 function isKhaProject(directory, projectfile) {
     return fs.existsSync(path.join(directory, 'Kha')) || fs.existsSync(path.join(directory, projectfile));

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AssetConverter = void 0;
+exports.AssetConverter = exports.supportedAssetExtensions = void 0;
 const ProjectFile_1 = require("./ProjectFile");
 const fs = require("fs-extra");
 const path = require("path");
@@ -8,6 +8,12 @@ const log = require("./log");
 const chokidar = require("chokidar");
 const crypto = require("crypto");
 const Throttle = require("promise-parallel-throttle");
+exports.supportedAssetExtensions = [
+    '.png', '.jpg', '.jpeg', '.hdr',
+    '.ogg', '.mp3', '.flac', '.wav',
+    '.mp4', '.webm', '.mov', '.wmv', '.avi',
+    '.ttf'
+];
 class AssetConverter {
     constructor(exporter, options, assetMatchers) {
         this.exporter = exporter;
@@ -98,37 +104,43 @@ class AssetConverter {
                 }
                 const ext = fileinfo.ext.toLowerCase();
                 log.info('Reexporting ' + outPath + ext);
-                switch (ext) {
-                    case '.png':
-                    case '.jpg':
-                    case '.jpeg':
-                    case '.hdr':
-                        { }
-                        await this.exporter.copyImage(this.platform, file, outPath, {}, {});
+                let result = null;
+                const assetType = AssetConverter.getExtensionAssetType(ext);
+                switch (assetType) {
+                    case 'image':
+                        result = await this.exporter.copyImage(this.platform, file, outPath, {}, {});
                         break;
-                    case '.ogg':
-                    case '.mp3':
-                    case '.flac':
-                    case '.wav': {
+                    case 'sound':
                         if (!this.canDecodeFormat(ext)) {
                             log.error(`Error: ${fileinfo.base} should be in wav format, or use \`--ffmpeg path/to/ffmpeg\` option to convert ogg/mp3/flac files`);
                         }
-                        await this.exporter.copySound(this.platform, file, outPath, {});
+                        result = await this.exporter.copySound(this.platform, file, outPath, {});
                         break;
-                    }
-                    case '.mp4':
-                    case '.webm':
-                    case '.mov':
-                    case '.wmv':
-                    case '.avi': {
-                        await this.exporter.copyVideo(this.platform, file, outPath, {});
+                    case 'video':
+                        result = await this.exporter.copyVideo(this.platform, file, outPath, {});
                         break;
-                    }
-                    case '.ttf':
-                        await this.exporter.copyFont(this.platform, file, outPath, {});
+                    case 'font':
+                        result = await this.exporter.copyFont(this.platform, file, outPath, {});
                         break;
-                    default:
-                        await this.exporter.copyBlob(this.platform, file, outPath + ext, {});
+                    case 'blob':
+                        result = await this.exporter.copyBlob(this.platform, file, outPath + ext, {});
+                        break;
+                    case 'shader':
+                        break;
+                }
+                if (result && this.onAssetChanged) {
+                    const isKeepExt = assetType === 'blob';
+                    const exportInfo = AssetConverter.createExportInfo(fileinfo, isKeepExt, options, this.exporter.options.from);
+                    this.onAssetChanged({
+                        name: exportInfo.name,
+                        from: file,
+                        type: assetType,
+                        files: result.files,
+                        file_sizes: result.sizes,
+                        original_width: options.original_width,
+                        original_height: options.original_height,
+                        readable: options.readable
+                    });
                 }
                 for (let callback of ProjectFile_1.Callbacks.postAssetReexporting) {
                     callback(outPath + ext);
@@ -149,6 +161,15 @@ class AssetConverter {
                     }
                 });
             }
+            this.watcher.on('unlink', (file) => {
+                if (!this.onAssetRemoved)
+                    return;
+                const fileinfo = path.parse(file);
+                const ext = fileinfo.ext.toLowerCase();
+                const keepExt = !exports.supportedAssetExtensions.includes(ext);
+                const exportInfo = AssetConverter.createExportInfo(fileinfo, keepExt, options, this.exporter.options.from);
+                this.onAssetRemoved(exportInfo.name);
+            });
             this.watcher.on('ready', async () => {
                 ready = true;
                 let parsedFiles = [];
@@ -161,11 +182,9 @@ class AssetConverter {
                     let fileinfo = path.parse(file);
                     log.info('Exporting asset ' + (index + 1) + ' of ' + files.length + ' (' + fileinfo.base + ').');
                     const ext = fileinfo.ext.toLowerCase();
-                    switch (ext) {
-                        case '.png':
-                        case '.jpg':
-                        case '.jpeg':
-                        case '.hdr': {
+                    const assetType = AssetConverter.getExtensionAssetType(ext);
+                    switch (assetType) {
+                        case 'image': {
                             let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
                             let images;
                             if (options.noprocessing) {
@@ -179,10 +198,7 @@ class AssetConverter {
                             }
                             break;
                         }
-                        case '.ogg':
-                        case '.mp3':
-                        case '.flac':
-                        case '.wav': {
+                        case 'sound': {
                             let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
                             let sounds;
                             if (options.noprocessing) {
@@ -203,7 +219,7 @@ class AssetConverter {
                             }
                             break;
                         }
-                        case '.ttf': {
+                        case 'font': {
                             let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
                             let fonts;
                             if (options.noprocessing) {
@@ -217,11 +233,7 @@ class AssetConverter {
                             }
                             break;
                         }
-                        case '.mp4':
-                        case '.webm':
-                        case '.mov':
-                        case '.wmv':
-                        case '.avi': {
+                        case 'video': {
                             let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
                             let videos;
                             if (options.noprocessing) {
@@ -238,7 +250,7 @@ class AssetConverter {
                             }
                             break;
                         }
-                        default: {
+                        case 'blob': {
                             let exportInfo = AssetConverter.createExportInfo(fileinfo, true, options, this.exporter.options.from);
                             let blobs = await this.exporter.copyBlob(this.platform, file, exportInfo.destination, options);
                             if (!options.notinlist) {
@@ -273,6 +285,30 @@ class AssetConverter {
                 resolve(parsedFiles);
             });
         });
+    }
+    static getExtensionAssetType(ext) {
+        switch (ext) {
+            case '.png':
+            case '.jpg':
+            case '.jpeg':
+            case '.hdr':
+                return 'image';
+            case '.ogg':
+            case '.mp3':
+            case '.flac':
+            case '.wav':
+                return 'sound';
+            case '.mp4':
+            case '.webm':
+            case '.mov':
+            case '.wmv':
+            case '.avi':
+                return 'video';
+            case '.ttf':
+                return 'font';
+            default:
+                return 'blob';
+        }
     }
     async run(watch, temp) {
         let files = [];
