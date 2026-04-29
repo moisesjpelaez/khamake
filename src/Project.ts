@@ -101,7 +101,6 @@ export class Project {
 			html5: {},
 			flash: {},
 			android: {},
-			android_native: {},
 			ios: {},
 			xboxOne: {},
 			playStation4: {},

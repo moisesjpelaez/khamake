@@ -86,7 +86,7 @@ let options = [
     },
     {
         full: 'arch',
-        description: 'Target architecture to use. Possible parameters are arm7, arm8, x86, x86_64.',
+        description: 'Target architecture to use. Possible parameters are arm7, arm64, x86, x86_64.',
         value: true,
         default: Architecture_1.Architecture.Default
     },
