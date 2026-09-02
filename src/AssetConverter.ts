@@ -232,9 +232,6 @@ export class AssetConverter {
 					switch (assetType) {
 						case 'image': {
 							let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
-							// Copy the matcher options, copyImage() writes this image's
-							// dimensions into them and images converted in parallel would
-							// otherwise overwrite each other's values before they are read
 							let imageOptions = Object.assign({}, options);
 							let images: { files: string[], sizes: number[] };
 							if (imageOptions.noprocessing) {

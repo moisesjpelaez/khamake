@@ -373,12 +373,8 @@ async function exportKhaProject(options) {
     function writeResourcesJson(files) {
         const filePath = path.join(options.to, exporter.sysdir() + '-resources', 'files.json');
         const content = JSON.stringify({ files: files }, null, '\t');
-        // Rewriting an unchanged files.json gives it a new modification time,
-        // which makes the Haxe compilation server invalidate every module
-        // that depends on kha.Shaders
-        if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === content) {
-            return;
-        }
+        // Prevent rewriting an unchanged `files.json`
+        if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === content) return;
         fs.outputFileSync(filePath, content);
     }
     let assetConverter = new AssetConverter_1.AssetConverter(exporter, options, project.assetMatchers);
@@ -611,10 +607,6 @@ function findKhaVersion(dir) {
         }
         let gitStatus = 'git-error';
         try {
-            // --untracked-files=no keeps git from walking every untracked and
-            // ignored file (node_modules included). The timeout is there
-            // because `git status` still needs several seconds on some Windows
-            // git builds, and this only decorates a log line
             const output = child_process.spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8', cwd: dir, timeout: 500 }).output;
             gitStatus = '';
             for (const str of output) {
@@ -656,8 +648,6 @@ async function run(options, loglog) {
     else {
         options.kha = path.resolve(options.kha);
     }
-    // Only look up the version when it gets logged, findKhaVersion() shells
-    // out to git and its result would otherwise just be thrown away
     if (options.quiet) {
         log.info('Using Kha from ' + options.kha);
     }
