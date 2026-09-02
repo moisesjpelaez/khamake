@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.exportImage = void 0;
+exports.exportImage = exportImage;
 const child_process = require("child_process");
 const fs = require("fs-extra");
 const path = require("path");
@@ -155,5 +155,4 @@ async function exportImage(kha, exe, from, to, options, format, prealpha, powero
     await convertImage(from, temp, to, kha, exe, params, options, cache);
     return outputformat;
 }
-exports.exportImage = exportImage;
 //# sourceMappingURL=ImageTool.js.map

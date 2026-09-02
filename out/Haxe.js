@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.executeHaxe = void 0;
+exports.executeHaxe = executeHaxe;
 const child_process = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -37,5 +37,4 @@ function executeHaxe(from, haxeDirectory, options) {
         });
     });
 }
-exports.executeHaxe = executeHaxe;
 //# sourceMappingURL=Haxe.js.map

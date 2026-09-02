@@ -1,6 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.exportBmp = exports.exportPng24 = exports.exportPng = exports.exportIcns = exports.exportIco = void 0;
+exports.exportIco = exportIco;
+exports.exportIcns = exportIcns;
+exports.exportPng = exportPng;
+exports.exportPng24 = exportPng24;
+exports.exportBmp = exportBmp;
 const cp = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -43,21 +47,16 @@ function findIcon(icon, from, options) {
 function exportIco(icon, to, from, options) {
     run(options.kraffiti, findIcon(icon, from.toString(), options), to.toString(), 0, 0, 'ico', undefined, false, function () { });
 }
-exports.exportIco = exportIco;
 function exportIcns(icon, to, from, options) {
     run(options.kraffiti, findIcon(icon, from.toString(), options), to.toString(), 0, 0, 'icns', undefined, false, function () { });
 }
-exports.exportIcns = exportIcns;
 function exportPng(icon, to, width, height, background, transparent, from, options) {
     run(options.kraffiti, findIcon(icon, from.toString(), options), to.toString(), width, height, 'png', background, transparent, function () { });
 }
-exports.exportPng = exportPng;
 function exportPng24(icon, to, width, height, background, transparent, from, options) {
     run(options.kraffiti, findIcon(icon, from.toString(), options), to.toString(), width, height, 'png24', background, transparent, function () { });
 }
-exports.exportPng24 = exportPng24;
 function exportBmp(icon, to, width, height, background, from, options) {
     run(options.kraffiti, findIcon(icon, from.toString(), options), to.toString(), width, height, 'bmp', background, false, function () { });
 }
-exports.exportBmp = exportBmp;
 //# sourceMappingURL=Icon.js.map

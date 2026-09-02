@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.graphicsApi = void 0;
+exports.graphicsApi = graphicsApi;
 const GraphicsApi_1 = require("./GraphicsApi");
 const Platform_1 = require("./Platform");
 function graphicsApi(platform) {
@@ -37,5 +37,4 @@ function graphicsApi(platform) {
             return platform;
     }
 }
-exports.graphicsApi = graphicsApi;
 //# sourceMappingURL=defaults.js.map

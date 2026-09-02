@@ -417,10 +417,17 @@ async function exportKhaProject(options: Options): Promise<string> {
 	}
 
 	function writeResourcesJson(files: AssetInfo[]) {
-		fs.outputFileSync(
-			path.join(options.to, exporter!.sysdir() + '-resources', 'files.json'),
-			JSON.stringify({ files: files }, null, '\t')
-		);
+		const filePath = path.join(options.to, exporter!.sysdir() + '-resources', 'files.json');
+		const content = JSON.stringify({ files: files }, null, '\t');
+
+		// Rewriting an unchanged files.json gives it a new modification time,
+		// which makes the Haxe compilation server invalidate every module
+		// that depends on kha.Shaders
+		if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === content) {
+			return;
+		}
+
+		fs.outputFileSync(filePath, content);
 	}
 
 	let assetConverter = new AssetConverter(exporter, options, project.assetMatchers);
@@ -683,7 +690,11 @@ function findKhaVersion(dir: string): string {
 
 		let gitStatus = 'git-error';
 		try {
-			const output = child_process.spawnSync('git', ['status', '--porcelain'], {encoding: 'utf8', cwd: dir}).output;
+			// --untracked-files=no keeps git from walking every untracked and
+			// ignored file (node_modules included). The timeout is there
+			// because `git status` still needs several seconds on some Windows
+			// git builds, and this only decorates a log line
+			const output = child_process.spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], {encoding: 'utf8', cwd: dir, timeout: 500}).output;
 			gitStatus = '';
 			for (const str of output) {
 				if (str != null && str.length > 0) {
@@ -729,7 +740,14 @@ export async function run(options: Options, loglog: any): Promise<string> {
 	else {
 		options.kha = path.resolve(options.kha);
 	}
-	log.info('Using Kha (' + findKhaVersion(options.kha) + ') from ' + options.kha);
+	// Only look up the version when it gets logged, findKhaVersion() shells
+	// out to git and its result would otherwise just be thrown away
+	if (options.quiet) {
+		log.info('Using Kha from ' + options.kha);
+	}
+	else {
+		log.info('Using Kha (' + findKhaVersion(options.kha) + ') from ' + options.kha);
+	}
 
 	if (options.parallelAssetConversion === undefined) {
 		options.parallelAssetConversion = 0;

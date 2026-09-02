@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sysdir = exports.sys = void 0;
+exports.sys = sys;
+exports.sysdir = sysdir;
 const os = require("os");
 function sys() {
     if (os.platform() === 'win32') {
@@ -10,7 +11,6 @@ function sys() {
         return '';
     }
 }
-exports.sys = sys;
 function sysdir() {
     if (os.platform() === 'linux') {
         if (os.arch() === 'arm')
@@ -37,5 +37,4 @@ function sysdir() {
             throw 'Unsupported CPU';
     }
 }
-exports.sysdir = sysdir;
 //# sourceMappingURL=exec.js.map

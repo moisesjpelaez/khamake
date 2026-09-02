@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.writeXml = void 0;
+exports.writeXml = writeXml;
 const fs = require("fs-extra");
 function printElement(elem, data, indents) {
     for (let i = 0; i < indents; ++i)
@@ -49,5 +49,4 @@ function writeXml(xml, path) {
     data += '</' + xml.n + '>\n';
     fs.outputFileSync(path, data);
 }
-exports.writeXml = writeXml;
 //# sourceMappingURL=XmlWriter.js.map

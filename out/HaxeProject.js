@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.writeHaxeProject = void 0;
+exports.writeHaxeProject = writeHaxeProject;
 const fs = require("fs-extra");
 const path = require("path");
 const XmlWriter_1 = require("./XmlWriter");
@@ -412,5 +412,4 @@ function writeHaxeProject(projectdir, projectFiles, options) {
         IntelliJ(projectdir, options);
     }
 }
-exports.writeHaxeProject = writeHaxeProject;
 //# sourceMappingURL=HaxeProject.js.map

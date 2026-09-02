@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.close = exports.run = exports.api = void 0;
+exports.api = void 0;
+exports.run = run;
+exports.close = close;
 const child_process = require("child_process");
 const fs = require("fs-extra");
 const path = require("path");
@@ -369,7 +371,15 @@ async function exportKhaProject(options) {
         callback();
     }
     function writeResourcesJson(files) {
-        fs.outputFileSync(path.join(options.to, exporter.sysdir() + '-resources', 'files.json'), JSON.stringify({ files: files }, null, '\t'));
+        const filePath = path.join(options.to, exporter.sysdir() + '-resources', 'files.json');
+        const content = JSON.stringify({ files: files }, null, '\t');
+        // Rewriting an unchanged files.json gives it a new modification time,
+        // which makes the Haxe compilation server invalidate every module
+        // that depends on kha.Shaders
+        if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === content) {
+            return;
+        }
+        fs.outputFileSync(filePath, content);
     }
     let assetConverter = new AssetConverter_1.AssetConverter(exporter, options, project.assetMatchers);
     lastAssetConverter = assetConverter;
@@ -601,7 +611,11 @@ function findKhaVersion(dir) {
         }
         let gitStatus = 'git-error';
         try {
-            const output = child_process.spawnSync('git', ['status', '--porcelain'], { encoding: 'utf8', cwd: dir }).output;
+            // --untracked-files=no keeps git from walking every untracked and
+            // ignored file (node_modules included). The timeout is there
+            // because `git status` still needs several seconds on some Windows
+            // git builds, and this only decorates a log line
+            const output = child_process.spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8', cwd: dir, timeout: 500 }).output;
             gitStatus = '';
             for (const str of output) {
                 if (str != null && str.length > 0) {
@@ -642,7 +656,14 @@ async function run(options, loglog) {
     else {
         options.kha = path.resolve(options.kha);
     }
-    log.info('Using Kha (' + findKhaVersion(options.kha) + ') from ' + options.kha);
+    // Only look up the version when it gets logged, findKhaVersion() shells
+    // out to git and its result would otherwise just be thrown away
+    if (options.quiet) {
+        log.info('Using Kha from ' + options.kha);
+    }
+    else {
+        log.info('Using Kha (' + findKhaVersion(options.kha) + ') from ' + options.kha);
+    }
     if (options.parallelAssetConversion === undefined) {
         options.parallelAssetConversion = 0;
     }
@@ -745,7 +766,6 @@ async function run(options, loglog) {
     }
     return name;
 }
-exports.run = run;
 function close() {
     if (lastAssetConverter)
         lastAssetConverter.close();
@@ -754,5 +774,4 @@ function close() {
     if (lastHaxeCompiler)
         lastHaxeCompiler.close();
 }
-exports.close = close;
 //# sourceMappingURL=main.js.map

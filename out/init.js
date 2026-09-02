@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.run = void 0;
+exports.run = run;
 const fs = require("fs");
 const path = require("path");
 function run(name, from, projectfile) {
@@ -72,5 +72,4 @@ function run(name, from, projectfile) {
         fs.writeFileSync(path.join(from, 'Sources', 'Main.hx'), mainsource, { encoding: 'utf8' });
     }
 }
-exports.run = run;
 //# sourceMappingURL=init.js.map

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.convert = void 0;
+exports.convert = convert;
 const child_process = require("child_process");
 const fs = require("fs");
 const log = require("./log");
@@ -63,5 +63,4 @@ function convert(inFilename, outFilename, encoder, args = null) {
         });
     });
 }
-exports.convert = convert;
 //# sourceMappingURL=Converter.js.map

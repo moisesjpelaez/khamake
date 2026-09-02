@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.loadProject = exports.Callbacks = void 0;
+exports.Callbacks = void 0;
+exports.loadProject = loadProject;
 const fs = require("fs");
 const path = require("path");
 const Platform_1 = require("./Platform");
@@ -64,5 +65,4 @@ async function loadProject(from, projectfile, platform) {
         });
     });
 }
-exports.loadProject = loadProject;
 //# sourceMappingURL=ProjectFile.js.map

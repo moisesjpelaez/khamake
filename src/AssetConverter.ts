@@ -232,15 +232,19 @@ export class AssetConverter {
 					switch (assetType) {
 						case 'image': {
 							let exportInfo = AssetConverter.createExportInfo(fileinfo, false, options, this.exporter.options.from);
+							// Copy the matcher options, copyImage() writes this image's
+							// dimensions into them and images converted in parallel would
+							// otherwise overwrite each other's values before they are read
+							let imageOptions = Object.assign({}, options);
 							let images: { files: string[], sizes: number[] };
-							if (options.noprocessing) {
-								images = await this.exporter.copyBlob(this.platform, file, exportInfo.destination, options);
+							if (imageOptions.noprocessing) {
+								images = await this.exporter.copyBlob(this.platform, file, exportInfo.destination, imageOptions);
 							}
 							else {
-								images = await this.exporter.copyImage(this.platform, file, exportInfo.destination, options, cache);
+								images = await this.exporter.copyImage(this.platform, file, exportInfo.destination, imageOptions, cache);
 							}
-							if (!options.notinlist) {
-								parsedFiles.push({ name: exportInfo.name, from: file, type: 'image', files: images.files, file_sizes: images.sizes, original_width: options.original_width, original_height: options.original_height, readable: options.readable });
+							if (!imageOptions.notinlist) {
+								parsedFiles.push({ name: exportInfo.name, from: file, type: 'image', files: images.files, file_sizes: images.sizes, original_width: imageOptions.original_width, original_height: imageOptions.original_height, readable: imageOptions.readable });
 							}
 							break;
 						}
