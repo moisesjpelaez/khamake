@@ -6,6 +6,8 @@ exports.close = close;
 const child_process = require("child_process");
 const fs = require("fs-extra");
 const path = require("path");
+const util_1 = require("util");
+const execFile = (0, util_1.promisify)(child_process.execFile);
 const exec_1 = require("./exec");
 const korepath = require("./korepath");
 const log = require("./log");
@@ -580,7 +582,7 @@ function runProject(options, name) {
     });
 }
 exports.api = 2;
-function findKhaVersion(dir) {
+async function findKhaVersion(dir) {
     let p = path.join(dir, '.git');
     let hasGitInfo = false;
     if (fs.existsSync(p)) {
@@ -595,26 +597,17 @@ function findKhaVersion(dir) {
     if (hasGitInfo) {
         let gitVersion = 'git-error';
         try {
-            const output = child_process.spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', cwd: dir }).output;
-            for (const str of output) {
-                if (str != null && str.length > 0) {
-                    gitVersion = str.substr(0, 8);
-                    break;
-                }
+            const { stdout } = await execFile('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', cwd: dir });
+            if (stdout.length > 0) {
+                gitVersion = stdout.substr(0, 8);
             }
         }
         catch (error) {
         }
         let gitStatus = 'git-error';
         try {
-            const output = child_process.spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8', cwd: dir, timeout: 500 }).output;
-            gitStatus = '';
-            for (const str of output) {
-                if (str != null && str.length > 0) {
-                    gitStatus = str.trim();
-                    break;
-                }
-            }
+            const { stdout } = await execFile('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8', cwd: dir });
+            gitStatus = stdout.trim();
         }
         catch (error) {
         }

@@ -2,6 +2,9 @@ import * as child_process from 'child_process';
 import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from 'path';
+import { promisify } from 'util';
+
+const execFile = promisify(child_process.execFile);
 
 import {sys, sysdir} from './exec';
 import * as korepath from './korepath';
@@ -652,7 +655,7 @@ function runProject(options: any, name: string): Promise<void> {
 
 export let api = 2;
 
-function findKhaVersion(dir: string): string {
+async function findKhaVersion(dir: string): Promise<string> {
 	let p = path.join(dir, '.git');
 	let hasGitInfo = false;
 
@@ -670,12 +673,9 @@ function findKhaVersion(dir: string): string {
 	if (hasGitInfo) {
 		let gitVersion = 'git-error';
 		try {
-			const output = child_process.spawnSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8', cwd: dir}).output;
-			for (const str of output) {
-				if (str != null && str.length > 0) {
-					gitVersion = str.substr(0, 8);
-					break;
-				}
+			const { stdout } = await execFile('git', ['rev-parse', 'HEAD'], {encoding: 'utf8', cwd: dir});
+			if (stdout.length > 0) {
+				gitVersion = stdout.substr(0, 8);
 			}
 		}
 		catch (error) {
@@ -684,14 +684,8 @@ function findKhaVersion(dir: string): string {
 
 		let gitStatus = 'git-error';
 		try {
-			const output = child_process.spawnSync('git', ['status', '--porcelain', '--untracked-files=no'], {encoding: 'utf8', cwd: dir, timeout: 500}).output;
-			gitStatus = '';
-			for (const str of output) {
-				if (str != null && str.length > 0) {
-					gitStatus = str.trim();
-					break;
-				}
-			}
+			const { stdout } = await execFile('git', ['status', '--porcelain', '--untracked-files=no'], {encoding: 'utf8', cwd: dir});
+			gitStatus = stdout.trim();
 		}
 		catch (error) {
 
