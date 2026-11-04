@@ -84,7 +84,11 @@ class KromExporter extends KhaExporter_1.KhaExporter {
         return { files: [to + '.' + format], sizes: [1] };
     }
     async copyBlob(platform, from, to) {
-        fs.copySync(from.toString(), path.join(this.options.to, this.sysdir(), to), { overwrite: true });
+        const target = path.join(this.options.to, this.sysdir(), to);
+        const source = fs.statSync(from.toString());
+        if (!fs.existsSync(target) || fs.statSync(target).size !== source.size || fs.statSync(target).mtime.getTime() < source.mtime.getTime()) {
+            fs.copySync(from.toString(), target, { overwrite: true });
+        }
         return { files: [to], sizes: [1] };
     }
     async copyVideo(platform, from, to) {

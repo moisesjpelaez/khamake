@@ -126,7 +126,7 @@ export async function exportImage(kha: string, exe: string, from: string, to: st
 		outputformat = 'dxt5.k';
 	}
 
-	if (fs.existsSync(to) && fs.statSync(to).mtime.getTime() > fs.statSync(from.toString()).mtime.getTime()) {
+	if (fs.existsSync(to) && fs.statSync(to).mtime.getTime() >= fs.statSync(from.toString()).mtime.getTime()) {
 		if (cache[to] !== undefined) {
 			const cachedOptions = cache[to];
 			options.original_width = cachedOptions.original_width;
@@ -146,8 +146,9 @@ export async function exportImage(kha: string, exe: string, from: string, to: st
 		fs.copySync(from, temp, { overwrite: true });
 		fs.renameSync(temp, to);
 		let wh = await getWidthAndHeight(kha, exe, from, to, options, format, prealpha);
-		options.original_width = wh.w;
-		options.original_height = wh.h;
+		cache[to] = {};
+		cache[to].original_width = options.original_width = wh.w;
+		cache[to].original_height = options.original_height = wh.h;
 		return outputformat;
 	}
 
