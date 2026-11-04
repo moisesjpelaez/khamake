@@ -6,8 +6,6 @@ exports.close = close;
 const child_process = require("child_process");
 const fs = require("fs-extra");
 const path = require("path");
-const util_1 = require("util");
-const execFile = (0, util_1.promisify)(child_process.execFile);
 const exec_1 = require("./exec");
 const korepath = require("./korepath");
 const log = require("./log");
@@ -376,7 +374,8 @@ async function exportKhaProject(options) {
         const filePath = path.join(options.to, exporter.sysdir() + '-resources', 'files.json');
         const content = JSON.stringify({ files: files }, null, '\t');
         // Prevent rewriting an unchanged `files.json`
-        if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === content) return;
+        if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === content)
+            return;
         fs.outputFileSync(filePath, content);
     }
     let assetConverter = new AssetConverter_1.AssetConverter(exporter, options, project.assetMatchers);
@@ -582,43 +581,36 @@ function runProject(options, name) {
     });
 }
 exports.api = 2;
-async function findKhaVersion(dir) {
-    let p = path.join(dir, '.git');
-    let hasGitInfo = false;
-    if (fs.existsSync(p)) {
-        let stat = fs.statSync(p);
-        hasGitInfo = stat.isDirectory();
-        // otherwise git might not utilize an in-place directory
-        if (!hasGitInfo) {
-            let contents = fs.readFileSync(p).toString('utf8', 0, 7);
-            hasGitInfo = contents === 'gitdir:';
+// Reads the commit from the repository files: running git for a log line
+// costs seconds with some git builds, and khamake can't exit before it ends
+function findKhaVersion(dir) {
+    try {
+        let gitDir = path.join(dir, '.git');
+        if (fs.statSync(gitDir).isFile()) {
+            // Submodules and worktrees: "gitdir: <path>"
+            const target = fs.readFileSync(gitDir, 'utf8').trim().replace(/^gitdir:\s*/, '');
+            gitDir = path.resolve(dir, target);
         }
-    }
-    if (hasGitInfo) {
-        let gitVersion = 'git-error';
-        try {
-            const { stdout } = await execFile('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', cwd: dir });
-            if (stdout.length > 0) {
-                gitVersion = stdout.substr(0, 8);
+        const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+        if (!head.startsWith('ref: ')) {
+            return head.substr(0, 8);
+        }
+        const ref = head.substr(5);
+        const refPath = path.join(gitDir, ref);
+        if (fs.existsSync(refPath)) {
+            return fs.readFileSync(refPath, 'utf8').trim().substr(0, 8);
+        }
+        const packedRefs = path.join(gitDir, 'packed-refs');
+        if (fs.existsSync(packedRefs)) {
+            for (const line of fs.readFileSync(packedRefs, 'utf8').split('\n')) {
+                if (line.trim().endsWith(' ' + ref)) {
+                    return line.substr(0, 8);
+                }
             }
         }
-        catch (error) {
-        }
-        let gitStatus = 'git-error';
-        try {
-            const { stdout } = await execFile('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8', cwd: dir });
-            gitStatus = stdout.trim();
-        }
-        catch (error) {
-        }
-        if (gitStatus) {
-            return gitVersion + ', ' + gitStatus.replace(/\n/g, ',');
-        }
-        else {
-            return gitVersion;
-        }
+        return ref;
     }
-    else {
+    catch (error) {
         return '¯\\_(ツ)_/¯';
     }
 }
