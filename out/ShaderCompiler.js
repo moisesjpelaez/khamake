@@ -11,6 +11,28 @@ const GraphicsApi_1 = require("./GraphicsApi");
 const Platform_1 = require("./Platform");
 const AssetConverter_1 = require("./AssetConverter");
 const log = require("./log");
+/** `to` if it exists, else the oldest of the variants krafix writes for `name` (name: base.stage), else `to`. **/
+function existingOutput(dir, name, type, to) {
+    if (fs.existsSync(to) || !fs.existsSync(dir))
+        return to;
+    const dot = name.lastIndexOf('.');
+    const stem = dot < 0 ? name : name.substring(0, dot);
+    const stage = dot < 0 ? '' : name.substring(dot);
+    const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const variant = new RegExp('^' + escape(stem) + '-[a-z0-9]+' + escape(stage + '.' + type) + '$');
+    let oldest = null;
+    let oldestTime = Infinity;
+    for (const file of fs.readdirSync(dir)) {
+        if (!variant.test(file))
+            continue;
+        const time = fs.statSync(path.join(dir, file)).mtime.getTime();
+        if (time < oldestTime) {
+            oldestTime = time;
+            oldest = path.join(dir, file);
+        }
+    }
+    return oldest !== null ? oldest : to;
+}
 class CompiledShader {
     constructor() {
         this.files = [];
@@ -289,8 +311,11 @@ class ShaderCompiler {
             let from = file;
             let to = path.join(this.to, fileinfo.name + '.' + this.type);
             let temp = to + '.temp';
+            // krafix may write the output under other names (HTML5: name-webgl2.frag.essl
+            // for name.frag): the oldest of those then tells whether the shader is up to date
+            let output = existingOutput(this.to, fileinfo.name, this.type, to);
             fs.stat(from, (fromErr, fromStats) => {
-                fs.stat(to, (toErr, toStats) => {
+                fs.stat(output, (toErr, toStats) => {
                     if (options.noprocessing) {
                         if (!toStats || toStats.mtime.getTime() < fromStats.mtime.getTime()) {
                             fs.copySync(from, to, { overwrite: true });
